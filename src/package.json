@@ -5,6 +5,7 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
+    "devstart": "forever -w index.js",
     "start": "node index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -21,6 +22,7 @@
   "dependencies": {
     "bubble-di": "^1.1.0",
     "express": "^4.17.1",
+    "forever": "^3.0.4",
     "log4js": "^6.3.0",
     "pg-promise": "^10.9.2"
   },

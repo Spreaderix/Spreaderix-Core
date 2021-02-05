@@ -1,11 +1,11 @@
 // @ts-check
 
-import express from 'express';
+import express from 'express'; // http://expressjs.com/
 import bodyParser from 'body-parser';
-import Log4js from 'log4js';
+import Log4js from 'log4js'; // https://www.npmjs.com/package/log4js
 
-import { DiContainer } from 'bubble-di';
-import Pgp from 'pg-promise';
+import { DiContainer } from 'bubble-di'; // https://www.npmjs.com/package/bubble-di
+import Pgp from 'pg-promise'; // https://www.npmjs.com/package/pg-promise
 import { Spreaderix } from './spreaderix.js';
 
 DiContainer.setContainer(new DiContainer());
