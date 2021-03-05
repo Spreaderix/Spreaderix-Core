@@ -1,0 +1,36 @@
+{
+  "name": "spreaderix",
+  "version": "1.0.0",
+  "description": "",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "devstart": "forever -w index.js",
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Spreaderix/Spreaderix-Core.git"
+  },
+  "author": "Daniel Kienboeck",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Spreaderix/Spreaderix-Core/issues"
+  },
+  "homepage": "https://github.com/Spreaderix/Spreaderix-Core#readme",
+  "dependencies": {
+    "bubble-di": "^1.1.0",
+    "express": "^4.17.1",
+    "forever": "^3.0.4",
+    "log4js": "^6.3.0",
+    "pg-promise": "^10.9.2"
+  },
+  "devDependencies": {
+    "eslint": "^7.18.0",
+    "eslint-config-standard": "^16.0.2",
+    "eslint-plugin-import": "^2.22.1",
+    "eslint-plugin-node": "^11.1.0",
+    "eslint-plugin-promise": "^4.2.1"
+  }
+}

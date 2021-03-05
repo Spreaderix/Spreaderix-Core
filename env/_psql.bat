@@ -1,0 +1,1 @@
+docker exec -it spreaderixdb-instance psql -U spreaderix
