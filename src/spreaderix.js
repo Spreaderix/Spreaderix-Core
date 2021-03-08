@@ -152,6 +152,38 @@ export class Spreaderix {
                 res.status(500).end();
             }
         });
+
+        this.webserver.patch('/simple/projects/:projectname/stores/:storename/:id', async (req, res) => { 
+            try {
+                const projectName = req.params.projectname;
+                const storeName = req.params.storename;
+                const idNumber = req.params.id;
+                const columns = req.body.columns || {};
+                let columnString = '';
+                if (Array.isArray(columns)) {
+                    columns.forEach((value, index, array) => {
+                        if (value && value.column && value.value) {
+                            if (columnString != ''){
+                                columnString = columnString + `, ${value.column} = '${value.value}'`;
+                            }else {
+                                columnString = columnString + ` ${value.column} = '${value.value}'`;
+                            }
+                        }
+                    });
+                }
+                let id;
+                if (Object.keys(columns).length > 0) {
+                    // id = await this.database.one('UPDATE $1:name.$2:name SET $3:name WHERE id=' + idNumber, [projectName, storeName, columnString]);
+                    this.database.one(`UPDATE ${projectName}.${storeName} SET ${columnString} WHERE id=` + idNumber);
+                } 
+                this.logger.info('updated record ' + projectName + '.' + storeName + ': id=' + idNumber);
+                res.status(201).json(id).end(); 
+            } catch (e) {
+                this.logger.error(e);
+                res.status(500).end();
+            }
+        });
+
     }
 
     start () {

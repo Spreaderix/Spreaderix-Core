@@ -15,7 +15,7 @@ DiContainer.getContainer().registerInstance('config', {
         PORT: 10001
     },
     Database: {
-        ConnectionString: 'postgres://spreaderix:tqsfbefsjy@localhost:54320/spreaderix'
+        ConnectionString: 'postgres://postgres:admin@localhost:5432/spreaderix'
     },
     Log: {
         Level: Log4js.levels.ALL.levelStr
