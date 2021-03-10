@@ -4,6 +4,7 @@
 import Pgp from 'pg-promise';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { createFilter } from "odata-v4-pg";
 
 export class Spreaderix {
     /**
@@ -373,6 +374,26 @@ export class Spreaderix {
                         }
                     }
                 }); 
+            }
+        });
+
+        this.webserver.get('/simple/projects/:projectname/storewithcondition/:storename', async (req, res) => {
+            try {
+                var filter = createFilter(req.query.$filter + "");            
+                const projectName = req.params.projectname;
+                const storeName = req.params.storename;          
+                
+                var query = 'SELECT * FROM ' + projectName + '.' + storeName + ' WHERE ';
+                var result = await this.database.any(query + `${filter.where}`, filter.parameters);
+                
+                if (result.length === 0) {
+                    res.status(404).end();
+                } else {
+                    res.status(200).json(result).end();
+                }
+            } catch (e) {
+                this.logger.error(e);
+                res.status(500).end();
             }
         });
     }
