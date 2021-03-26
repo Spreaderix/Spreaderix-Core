@@ -74,7 +74,7 @@ export class Spreaderix {
                         var token = jwt.sign({ id: user.id }, 'secretKeyValue', { expiresIn: 86400 });
                         res.status(200).send({ auth: true, token: token });
                     }
-                    res.status(200).json(result).end();
+                    res.status(200).json(result).end(); // todo: hier kommt man nie hin?
                 }
             } catch (e) {
                 this.logger.error(e);
@@ -261,6 +261,26 @@ export class Spreaderix {
             }
         });
 
+        this.webserver.get('/simple/projects/:projectname/storewithcondition/:storename', async (req, res) => {
+            try {
+                var filter = createFilter(req.query.$filter + "");            
+                const projectName = req.params.projectname;
+                const storeName = req.params.storename;          
+                
+                var query = 'SELECT * FROM ' + projectName + '.' + storeName + ' WHERE ';
+                var result = await this.database.any(query + `${filter.where}`, filter.parameters);
+                
+                if (result.length === 0) {
+                    res.status(404).end();
+                } else {
+                    res.status(200).json(result).end();
+                }
+            } catch (e) {
+                this.logger.error(e);
+                res.status(500).end();
+            }
+        });
+
         this.webserver.post('/simple/projects/:projectname/stores/:storename', async (req, res) => {
             var token = req.headers['x-json-web-token'];
             if (!token) {
@@ -377,25 +397,7 @@ export class Spreaderix {
             }
         });
 
-        this.webserver.get('/simple/projects/:projectname/storewithcondition/:storename', async (req, res) => {
-            try {
-                var filter = createFilter(req.query.$filter + "");            
-                const projectName = req.params.projectname;
-                const storeName = req.params.storename;          
-                
-                var query = 'SELECT * FROM ' + projectName + '.' + storeName + ' WHERE ';
-                var result = await this.database.any(query + `${filter.where}`, filter.parameters);
-                
-                if (result.length === 0) {
-                    res.status(404).end();
-                } else {
-                    res.status(200).json(result).end();
-                }
-            } catch (e) {
-                this.logger.error(e);
-                res.status(500).end();
-            }
-        });
+        
     }
 
     start() {
