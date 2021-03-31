@@ -1,10 +1,9 @@
 // @ts-check
 
-// eslint-disable-next-line no-unused-vars
 import Pgp from 'pg-promise';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { createFilter } from "odata-v4-pg";
+import { createFilter } from 'odata-v4-pg';
 
 export class Spreaderix {
     /**
@@ -12,7 +11,7 @@ export class Spreaderix {
      * @param {import("express").Application} webserver
      * @param {Pgp.IDatabase} database
      */
-    constructor(config, logger, webserver, database) {
+    constructor (config, logger, webserver, database) {
         this.config = config;
         this.logger = logger;
         this.webserver = webserver;
@@ -24,56 +23,72 @@ export class Spreaderix {
         this.registerDataManipulation();
     }
 
-    registerUserAuthentication() {
+    registerUserAuthentication () {
+        // TODO: change /signUp -> method based naming to something restful like POST /users
+        // TODO: remove code duplication of token creation (sign in)
+        // TODO: remove SQL Injection possibilities (all operations)
+        // TODO: does an error in database.one throws exception? (check for all db-operations)
+        // TODO: verify email is unique with database methods (unique index?)
+        // TODO: verify if auth-field is required or can be implied by status code
+        // TODO: check var, let, const in javascript (DK: made changes)
         this.webserver.post('/signUp', async (req, res) => {
             try {
-                var hashedPassword = bcrypt.hashSync(req.body.password, 8);
-                var name = req.body.name;
-                var email = req.body.email;
+                const hashedPassword = bcrypt.hashSync(req.body.password, 8);
+                const name = req.body.name;
+                const email = req.body.email;
 
                 // 1. create if not existing table users
-                await this.database.none(`CREATE TABLE IF NOT EXISTS USERS (id serial primary key, 
-                    name varchar(255), email varchar(255), passwordHash varchar(255) )`);
+                await this.database.none(`
+                    CREATE TABLE IF NOT EXISTS USERS (
+                        id serial primary key, 
+                        name varchar(255), 
+                        email varchar(255), 
+                        passwordHash varchar(255) 
+                    )`);
 
                 // 2. insert user
-                var query = 'INSERT INTO USERS (name, email, passwordhash) VALUES (\''
-                    + name + '\', \'' + email + '\', \'' + hashedPassword + '\') RETURNING id';
+                const query = 'INSERT INTO USERS (name, email, passwordhash) VALUES (\'' +
+                    name + '\', \'' + email + '\', \'' + hashedPassword + '\') RETURNING id';
 
-                var userId = await this.database.one(query);
+                const userId = await this.database.one(query);
                 this.logger.info('created user with id=' + userId);
 
                 // 3. create token
-                var token = jwt.sign({ id: userId }, 'secretKeyValue', { expiresIn: 86400 });
+                const token = jwt.sign({ id: userId }, 'secretKeyValue', { expiresIn: 86400 });
                 this.logger.info('created token ' + jwt.decode(token, { complete: true }));
 
                 res.status(200).send({ auth: true, token: token });
-
             } catch (e) {
                 this.logger.error(e);
                 res.status(500).end();
             }
         });
 
+        // TODO: change /signIn -> method based naming to something restful like POST /sessions
+        // TODO: remove sql injection
+        // TODO: what happens if more than 1 users' user is found in table (if not verified by db)
         this.webserver.post('/signIn', async (req, res) => {
-            var email = req.body.email;
+            const email = req.body.email;
             try {
                 // check if user is exiting
-                var query = 'SELECT * FROM USERS WHERE email=\'' + email + '\'';
-                var result = await this.database.any(query);
+                const query = 'SELECT * FROM USERS WHERE email=\'' + email + '\'';
+                const result = await this.database.any(query);
 
                 if (result.length === 0) {
                     res.status(404).end();
                 } else {
                     // get complete user
-                    var user = await this.database.one(query);
+                    const user = await this.database.one(query);
+
                     // user found -> compare pw
-                    var passwordIsValid = bcrypt.compareSync(req.body.password, user.passwordhash);
+                    const passwordIsValid = bcrypt.compareSync(req.body.password, user.passwordhash);
                     if (!passwordIsValid) {
                         res.status(401).send({ auth: false, token: null });
                     } else {
-                        var token = jwt.sign({ id: user.id }, 'secretKeyValue', { expiresIn: 86400 });
+                        const token = jwt.sign({ id: user.id }, 'secretKeyValue', { expiresIn: 86400 });
                         res.status(200).send({ auth: true, token: token });
                     }
+
                     res.status(200).json(result).end(); // todo: hier kommt man nie hin?
                 }
             } catch (e) {
@@ -82,28 +97,29 @@ export class Spreaderix {
             }
         });
 
-        // this endpoint is for testing
+        // this endpoint is for checking the token
+        // TODO: rename REST-ful
         this.webserver.post('/checkSignedUp', async (req, res) => {
-            var token = req.headers['x-json-web-token'];
+            const token = req.headers['x-json-web-token'];
             if (!token) {
                 res.status(401).send({ auth: false, message: 'Token not provided.' });
             } else {
                 jwt.verify(token.toString(), 'secretKeyValue', (error, decoded) => {
                     if (error) {
-                        res.status(500).send({auth: false, message: 'Token can not be verified.'});
+                        res.status(500).send({ auth: false, message: 'Token can not be verified.' });
                     } else {
                         res.status(200).end();
                     }
-                }); 
-            }       
+                });
+            }
         });
     }
 
-    registerProjects() {
+    registerProjects () {
         this.webserver.get('/simple/projects', async (req, res) => {
             try {
                 res.status(200).json(await (
-                    await this.database.any('SELECT schema_name FROM information_schema.schemata where schema_name not in ' + 
+                    await this.database.any('SELECT schema_name FROM information_schema.schemata where schema_name not in ' +
                         '(\'information_schema\',\'public\',\'pg_catalog\',\'pg_toast\',\'pg_toast_temp_1\',\'pg_temp_1\');')
                 ).map(x => x.schema_name)).end();
             } catch (e) {
@@ -113,13 +129,13 @@ export class Spreaderix {
         });
 
         this.webserver.post('/simple/projects', async (req, res) => {
-            var token = req.headers['x-json-web-token'];
+            const token = req.headers['x-json-web-token'];
             if (!token) {
                 res.status(401).send({ auth: false, message: 'Token not provided.' });
             } else {
                 jwt.verify(token.toString(), 'secretKeyValue', async (error, decoded) => {
                     if (error) {
-                        res.status(500).send({auth: false, message: 'Token can not be verified.'});
+                        res.status(500).send({ auth: false, message: 'Token can not be verified.' });
                     } else {
                         try {
                             const projectName = req.body.name;
@@ -131,18 +147,19 @@ export class Spreaderix {
                             res.status(500).end();
                         }
                     }
-                }); 
-            }             
+                });
+            }
         });
 
+        // TODO: implement check for webtoken as middleware: http://expressjs.com/en/guide/writing-middleware.html (code duplication; can also be apply for reading operations)
         this.webserver.delete('/simple/projects/:projectname', async (req, res) => {
-            var token = req.headers['x-json-web-token'];
+            const token = req.headers['x-json-web-token'];
             if (!token) {
                 res.status(401).send({ auth: false, message: 'Token not provided.' });
             } else {
                 jwt.verify(token.toString(), 'secretKeyValue', async (error, decoded) => {
                     if (error) {
-                        res.status(500).send({auth: false, message: 'Token can not be verified.'});
+                        res.status(500).send({ auth: false, message: 'Token can not be verified.' });
                     } else {
                         try {
                             const projectName = req.params.projectname;
@@ -154,12 +171,12 @@ export class Spreaderix {
                             res.status(500).end();
                         }
                     }
-                }); 
-            } 
+                });
+            }
         });
     }
 
-    registerTables() {
+    registerTables () {
         this.webserver.get('/simple/projects/:projectname/stores', async (req, res) => {
             try {
                 const projectName = req.params.projectname;
@@ -173,13 +190,13 @@ export class Spreaderix {
         });
 
         this.webserver.post('/simple/projects/:projectname/stores', async (req, res) => {
-            var token = req.headers['x-json-web-token'];
+            const token = req.headers['x-json-web-token'];
             if (!token) {
                 res.status(401).send({ auth: false, message: 'Token not provided.' });
             } else {
                 jwt.verify(token.toString(), 'secretKeyValue', async (error, decoded) => {
                     if (error) {
-                        res.status(500).send({auth: false, message: 'Token can not be verified.'});
+                        res.status(500).send({ auth: false, message: 'Token can not be verified.' });
                     } else {
                         try {
                             const projectName = req.params.projectname;
@@ -193,7 +210,7 @@ export class Spreaderix {
                                     }
                                 });
                             }
-            
+
                             const createStatementStart = Pgp.as.format('CREATE TABLE IF NOT EXISTS $1:name.$2:name', [projectName, tableName]);
                             await this.database.none(`$1:raw (id serial primary key ${columnString})`, [createStatementStart]);
                             this.logger.info('created table ' + projectName + '.' + tableName + ' with columns: id serial primary key, ' + columnString);
@@ -203,18 +220,18 @@ export class Spreaderix {
                             res.status(500).end();
                         }
                     }
-                }); 
+                });
             }
         });
 
         this.webserver.delete('/simple/projects/:projectname/stores/:storename', async (req, res) => {
-            var token = req.headers['x-json-web-token'];
+            const token = req.headers['x-json-web-token'];
             if (!token) {
                 res.status(401).send({ auth: false, message: 'Token not provided.' });
             } else {
                 jwt.verify(token.toString(), 'secretKeyValue', async (error, decoded) => {
                     if (error) {
-                        res.status(500).send({auth: false, message: 'Token can not be verified.'});
+                        res.status(500).send({ auth: false, message: 'Token can not be verified.' });
                     } else {
                         try {
                             const projectName = req.params.projectname;
@@ -227,12 +244,15 @@ export class Spreaderix {
                             res.status(500).end();
                         }
                     }
-                }); 
-            }   
+                });
+            }
         });
     }
 
-    registerDataManipulation() {
+    // TODO: check if some further app.METHODs make sense http://expressjs.com/en/4x/api.html#app.METHOD
+    //       purge?
+    registerDataManipulation () {
+        // get all items of table
         this.webserver.get('/simple/projects/:projectname/stores/:storename', async (req, res) => {
             try {
                 const projectName = req.params.projectname;
@@ -244,12 +264,13 @@ export class Spreaderix {
             }
         });
 
+        // get specific item of table
         this.webserver.get('/simple/projects/:projectname/stores/:storename/:id', async (req, res) => {
             try {
                 const projectName = req.params.projectname;
                 const storeName = req.params.storename;
                 const idNumber = req.params.id;
-                var result = await this.database.any('SELECT * FROM $1:name.$2:name WHERE id=' + idNumber, [projectName, storeName])
+                const result = await this.database.any('SELECT * FROM $1:name.$2:name WHERE id=' + idNumber, [projectName, storeName]);
                 if (result.length === 0) {
                     res.status(404).end();
                 } else {
@@ -261,15 +282,17 @@ export class Spreaderix {
             }
         });
 
+        // TODO: rename endpoint to something with odata to be able to predict usage
+        // TODO: add test script for demonstration (and testing) purpose (see folder /test in repo)
         this.webserver.get('/simple/projects/:projectname/storewithcondition/:storename', async (req, res) => {
             try {
-                var filter = createFilter(req.query.$filter + "");            
+                const filter = createFilter(req.query.$filter + '');
                 const projectName = req.params.projectname;
-                const storeName = req.params.storename;          
-                
-                var query = 'SELECT * FROM ' + projectName + '.' + storeName + ' WHERE ';
-                var result = await this.database.any(query + `${filter.where}`, filter.parameters);
-                
+                const storeName = req.params.storename;
+
+                const query = 'SELECT * FROM ' + projectName + '.' + storeName + ' WHERE ';
+                const result = await this.database.any(query + `${filter.where}`, filter.parameters);
+
                 if (result.length === 0) {
                     res.status(404).end();
                 } else {
@@ -282,13 +305,13 @@ export class Spreaderix {
         });
 
         this.webserver.post('/simple/projects/:projectname/stores/:storename', async (req, res) => {
-            var token = req.headers['x-json-web-token'];
+            const token = req.headers['x-json-web-token'];
             if (!token) {
                 res.status(401).send({ auth: false, message: 'Token not provided.' });
             } else {
                 jwt.verify(token.toString(), 'secretKeyValue', async (error, decoded) => {
                     if (error) {
-                        res.status(500).send({auth: false, message: 'Token can not be verified.'});
+                        res.status(500).send({ auth: false, message: 'Token can not be verified.' });
                     } else {
                         try {
                             const projectName = req.params.projectname;
@@ -307,26 +330,26 @@ export class Spreaderix {
                             res.status(500).end();
                         }
                     }
-                }); 
-            }   
+                });
+            }
         });
 
-        this.webserver.delete('/simple/projects/:projectname/stores/:storename/:id', async (req, res) => { 
-            var token = req.headers['x-json-web-token'];
+        this.webserver.delete('/simple/projects/:projectname/stores/:storename/:id', async (req, res) => {
+            const token = req.headers['x-json-web-token'];
             if (!token) {
                 res.status(401).send({ auth: false, message: 'Token not provided.' });
             } else {
                 jwt.verify(token.toString(), 'secretKeyValue', async (error, decoded) => {
                     if (error) {
-                        res.status(500).send({auth: false, message: 'Token can not be verified.'});
+                        res.status(500).send({ auth: false, message: 'Token can not be verified.' });
                     } else {
                         try {
                             const projectName = req.params.projectname;
                             const storeName = req.params.storename;
                             const idNumber = req.params.id;
-            
+
                             // check if id is exiting
-                            var result = await this.database.any('SELECT * FROM $1:name.$2:name WHERE id=' + idNumber, [projectName, storeName])
+                            const result = await this.database.any('SELECT * FROM $1:name.$2:name WHERE id=' + idNumber, [projectName, storeName]);
                             if (result.length === 0) {
                                 // id not found
                                 res.status(404).end();
@@ -341,28 +364,28 @@ export class Spreaderix {
                             res.status(500).end();
                         }
                     }
-                }); 
-            } 
+                });
+            }
         });
 
         this.webserver.patch('/simple/projects/:projectname/stores/:storename/:id', async (req, res) => {
-            var token = req.headers['x-json-web-token'];
+            const token = req.headers['x-json-web-token'];
             if (!token) {
                 res.status(401).send({ auth: false, message: 'Token not provided.' });
             } else {
                 jwt.verify(token.toString(), 'secretKeyValue', async (error, decoded) => {
                     if (error) {
-                        res.status(500).send({auth: false, message: 'Token can not be verified.'});
+                        res.status(500).send({ auth: false, message: 'Token can not be verified.' });
                     } else {
                         try {
                             const projectName = req.params.projectname;
                             const storeName = req.params.storename;
                             const idNumber = req.params.id;
                             const columns = req.body.columns || {};
-            
+
                             // check if id is exiting
-                            var result = await this.database.any('SELECT * FROM $1:name.$2:name WHERE id=' + idNumber, [projectName, storeName])
-                            if (result.length === 0) {
+                            const resultIdExisting = await this.database.any('SELECT * FROM $1:name.$2:name WHERE id=' + idNumber, [projectName, storeName]);
+                            if (resultIdExisting.length === 0) {
                                 // id not found
                                 res.status(404).end();
                             } else {
@@ -371,7 +394,7 @@ export class Spreaderix {
                                 if (Array.isArray(columns)) {
                                     columns.forEach((value, index, array) => {
                                         if (value && value.column && value.value) {
-                                            if (columnString != '') {
+                                            if (columnString !== '') {
                                                 columnString = columnString + `, ${value.column} = '${value.value}'`;
                                             } else {
                                                 columnString = columnString + ` ${value.column} = '${value.value}'`;
@@ -382,7 +405,7 @@ export class Spreaderix {
                                 let id;
                                 if (Object.keys(columns).length > 0) {
                                     // id = await this.database.one('UPDATE $1:name.$2:name SET $3:name WHERE id=' + idNumber, [projectName, storeName, columnString]);
-                                    var result = await this.database.any(`UPDATE ${projectName}.${storeName} SET ${columnString} WHERE id=` + idNumber);
+                                    const result = await this.database.any(`UPDATE ${projectName}.${storeName} SET ${columnString} WHERE id=` + idNumber);
                                     this.logger.info(result);
                                     this.logger.info('updated record ' + projectName + '.' + storeName + ': id=' + idNumber);
                                 }
@@ -393,14 +416,12 @@ export class Spreaderix {
                             res.status(500).end();
                         }
                     }
-                }); 
+                });
             }
         });
-
-        
     }
 
-    start() {
+    start () {
         return this.webserver.listen(this.config.WebServer.PORT, () => {
             this.logger.info(`Spreaderix listening at http://localhost:${this.config.WebServer.PORT}`);
         });
