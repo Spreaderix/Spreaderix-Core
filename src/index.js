@@ -8,6 +8,8 @@ import { DiContainer } from 'bubble-di'; // https://www.npmjs.com/package/bubble
 import Pgp from 'pg-promise'; // https://www.npmjs.com/package/pg-promise
 import { Spreaderix } from './spreaderix.js';
 
+import jwt from 'jsonwebtoken';
+
 DiContainer.setContainer(new DiContainer());
 
 DiContainer.getContainer().registerInstance('config', {
@@ -49,6 +51,29 @@ DiContainer.getContainer().register('webserver', {
         const app = express();
         app.use(bodyParser.json());
         app.use(Log4js.connectLogger(logger, { level: 'auto' }));
+
+        // middleware function verifying token
+        app.use(function(req, res, next) {
+            const path = req.path;
+            console.log(path);
+            if(path == '/users' || path == '/sessions' || path == 'verification'){ 
+                next();
+            }else{
+                const token = req.headers['x-json-web-token'];
+    
+                if (!token) {
+                    res.status(401).send({ auth: false, message: 'Token not provided.' });
+                } else {
+                    jwt.verify(token.toString(), 'secretKeyValue', async (error, decoded) => {
+                        if (error) {
+                            res.status(500).send({ auth: false, message: 'Token can not be verified.' });
+                        } else {
+                            next();
+                        }
+                    });
+                }
+            }
+        })
         return app;
     }
 });
