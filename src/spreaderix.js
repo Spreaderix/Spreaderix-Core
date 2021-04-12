@@ -24,7 +24,6 @@ export class Spreaderix {
     }
 
     registerUserAuthentication () {
-        // TODO: remove SQL Injection possibilities (all operations)
         // TODO: does an error in database.one throws exception? (check for all db-operations)
         // TODO: verify if auth-field is required or can be implied by status code
         this.webserver.post('/users', async (req, res) => {
@@ -43,15 +42,21 @@ export class Spreaderix {
                     )`);
 
                 // 2. check if email is existing
-                const queryEmail = 'SELECT * FROM USERS WHERE EMAIL = \'' + email + '\'';
+                const where = Pgp.as.format('WHERE email = $/useremail/', { useremail: email} ) ; // pre-format WHERE condition
+                const queryEmail = Pgp.as.format('SELECT $1:name FROM $2:name $3:raw', ['*', 'users', where]);
                 const user = await this.database.manyOrNone(queryEmail);
 
                 if (user.length > 0){ 
                     res.status(409).end();
                 }else{
                     // 3. insert user
-                    const query = 'INSERT INTO USERS (name, email, passwordhash) VALUES (\'' +
-                        name + '\', \'' + email + '\', \'' + hashedPassword + '\') RETURNING id';
+                    const obj = {
+                        name: name,
+                        email: email,
+                        passwordhash: hashedPassword
+                    };
+
+                    const query = Pgp.as.format('INSERT INTO USERS (${this:name}) VALUES (${this:csv}) RETURNING id', obj);
 
                     const userId = await this.database.one(query);
                     this.logger.info('created user with id=' + userId);
@@ -67,21 +72,20 @@ export class Spreaderix {
             }
         });
 
-        // TODO: remove sql injection
         this.webserver.post('/sessions', async (req, res) => {
             const email = req.body.email;
-            console.log("email:", email);
             try {
                 // check if user is exiting
-                const query = 'SELECT * FROM USERS WHERE email=\'' + email + '\'';
-                const result = await this.database.any(query);
+                const where = Pgp.as.format('WHERE email = $/useremail/', { useremail: email} ) ; // pre-format WHERE condition
+                const query = Pgp.as.format('SELECT $1:name FROM $2:name $3:raw', ['*', 'users', where]);
+                const user = await this.database.manyOrNone(query);
 
-                if (result.length === 0) {
+                if (user.length === 0) {
                     res.status(404).end();
-                } else if (result.length > 1){
+                } else if (user.length > 1){
                     res.status(500).end();  
                 } else {
-                    // get complete user
+                    // get user with hashed pw from db
                     const user = await this.database.one(query);
 
                     // user found -> compare pw
@@ -92,8 +96,6 @@ export class Spreaderix {
                         const token = createToken(user.id);
                         res.status(200).send({ auth: true, token: token });
                     }
-
-                    res.status(200).json(result).end(); // todo: hier kommt man nie hin?
                 }
             } catch (e) {
                 this.logger.error(e);
@@ -164,7 +166,7 @@ export class Spreaderix {
             try {
                 const projectName = req.params.projectname;
                 res.status(200).json(await (
-                    await this.database.any('SELECT table_name FROM information_schema.tables WHERE table_schema = \'$1:value\'', [projectName])
+                    await this.database.any('SELECT table_name FROM information_schema.tables WHERE table_schema = $/projectName/', { projectName: projectName})
                 ).map(x => x.table_name)).end();
             } catch (e) {
                 this.logger.error(e);
@@ -188,6 +190,7 @@ export class Spreaderix {
                 const createStatementStart = Pgp.as.format('CREATE TABLE IF NOT EXISTS $1:name.$2:name', [projectName, tableName]);
                 await this.database.none(`$1:raw (id serial primary key ${columnString})`, [createStatementStart]);
                 this.logger.info('created table ' + projectName + '.' + tableName + ' with columns: id serial primary key, ' + columnString);
+                
                 res.status(201).end();
             } catch (e) {
                 this.logger.error(e);
@@ -208,9 +211,7 @@ export class Spreaderix {
             }
         });
     }
-
-    // TODO: check if some further app.METHODs make sense http://expressjs.com/en/4x/api.html#app.METHOD
-    //       purge?
+    
     registerDataManipulation () {
         this.webserver.get('/simple/projects/:projectname/stores/:storename', async (req, res) => {
             try {
@@ -228,7 +229,12 @@ export class Spreaderix {
                 const projectName = req.params.projectname;
                 const storeName = req.params.storename;
                 const idNumber = req.params.id;
-                const result = await this.database.any('SELECT * FROM $1:name.$2:name WHERE id=' + idNumber, [projectName, storeName]);
+
+                const where = Pgp.as.format('WHERE id = $/idNumber/', { idNumber: idNumber} ) ; // pre-format WHERE condition
+                const query = Pgp.as.format('SELECT * FROM $1:name.$2:name $3:raw', [projectName, storeName, where]);
+
+                const result = await this.database.any(query);
+
                 if (result.length === 0) {
                     res.status(404).end();
                 } else {
@@ -246,7 +252,8 @@ export class Spreaderix {
                 const projectName = req.params.projectname;
                 const storeName = req.params.storename;
 
-                const query = 'SELECT * FROM ' + projectName + '.' + storeName + ' WHERE ';
+                const query = Pgp.as.format('SELECT * FROM $1:name.$2:name WHERE', [projectName, storeName]);
+
                 const result = await this.database.any(query + `${filter.where}`, filter.parameters);
 
                 if (result.length === 0) {
@@ -286,13 +293,18 @@ export class Spreaderix {
                 const idNumber = req.params.id;
 
                 // check if id is exiting
-                const result = await this.database.any('SELECT * FROM $1:name.$2:name WHERE id=' + idNumber, [projectName, storeName]);
+                const where = Pgp.as.format('WHERE id = $/idNumber/', { idNumber: idNumber } ) ; // pre-format WHERE condition
+                const query = Pgp.as.format('SELECT * FROM $1:name.$2:name $3:raw', [projectName, storeName, where]);
+                const result = await this.database.any(query);
+
                 if (result.length === 0) {
                     // id not found
                     res.status(404).end();
                 } else {
                     // do delete
-                    await this.database.none('DELETE FROM $1:name.$2:name where id = $3:value', [projectName, storeName, idNumber]);
+                    const query = Pgp.as.format('DELETE FROM $1:name.$2:name $3:raw', [projectName, storeName, where]);
+                    await this.database.none(query);
+
                     this.logger.info('deleted record ' + projectName + '.' + storeName);
                     res.status(202).end();
                 }
@@ -310,7 +322,10 @@ export class Spreaderix {
                 const columns = req.body.columns || {};
 
                 // check if id is exiting
-                const resultIdExisting = await this.database.any('SELECT * FROM $1:name.$2:name WHERE id=' + idNumber, [projectName, storeName]);
+                const where = Pgp.as.format('WHERE id = $/idNumber/', { idNumber: idNumber } ) ; // pre-format WHERE condition
+                const query = Pgp.as.format('SELECT * FROM $1:name.$2:name $3:raw', [projectName, storeName, where]);
+                const resultIdExisting = await this.database.any(query);
+
                 if (resultIdExisting.length === 0) {
                     // id not found
                     res.status(404).end();
@@ -330,9 +345,8 @@ export class Spreaderix {
                     }
                     let id;
                     if (Object.keys(columns).length > 0) {
-                        // id = await this.database.one('UPDATE $1:name.$2:name SET $3:name WHERE id=' + idNumber, [projectName, storeName, columnString]);
-                        const result = await this.database.any(`UPDATE ${projectName}.${storeName} SET ${columnString} WHERE id=` + idNumber);
-                        this.logger.info(result);
+                        const query = Pgp.as.format(`UPDATE $1:name.$2:name SET ${columnString} $3:raw`, [projectName, storeName, where]);
+                        const result = await this.database.any(query);
                         this.logger.info('updated record ' + projectName + '.' + storeName + ': id=' + idNumber);
                     }
                         res.status(202).json(id).end();
