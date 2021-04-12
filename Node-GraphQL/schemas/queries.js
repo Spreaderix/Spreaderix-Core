@@ -30,7 +30,7 @@ const RootQuery = new GraphQLObjectType({
           .catch(err => err);
       }
     },
-    store_data: { // db table ids
+    storeData: { // db table ids
       type: new GraphQLList(StoreDataType), 
       args: { schema_name: { type: GraphQLString }, store_name: { type: GraphQLString} },
       resolve(parentValue, args) {
@@ -43,7 +43,7 @@ const RootQuery = new GraphQLObjectType({
           .catch(err => err);
       }
     },
-    shoe_store_data: { // db table content of shoestore
+    shoeStoreData: { // db table content of shoestore
       type: new GraphQLList(ShoeStoreDataType), 
       args: { schema_name: { type: GraphQLString }, store_name: { type: GraphQLString} },
       resolve(parentValue, args) {
